@@ -25,7 +25,7 @@ function inst_configureOS() {
             fi
 
             case $DISTRO in
-            # add here distro that are debian or ubuntu based
+            # add here distro that are debian, ubuntu or fedora based
             # TODO: find a better way, maybe checking the existance
             # of a package manager
                 "neon" | "ubuntu" | "Ubuntu")
@@ -34,8 +34,11 @@ function inst_configureOS() {
                 "debian" | "Debian")
                     DISTRO="debian"
                 ;;
+                "fedora" | "Fedora")
+                    DISTRO="fedora"
+                ;;
                 *)
-                    echo "Distro: $DISTRO, is not supported. If your distribution is based on debian or ubuntu,
+                    echo "Distro: $DISTRO, is not supported. If your distribution is based on debian, ubuntu or fedora,
                         please set the 'OSDISTRO' environment variable to one of these distro (you can use config.sh file)"
                 ;;
             esac
@@ -58,8 +61,16 @@ function inst_configureOS() {
 function inst_dbCreate() {
     echo "Creating database..."
 
+    # Check for mysql client / server availability
+    if ! command -v mysql >/dev/null 2>&1 ; then
+        echo "ERROR: 'mysql' client not found on PATH."
+        echo "If you want the installer to attempt installing Oracle MySQL on Fedora, set INSTALL_MYSQL=1 and run './acore.sh install-deps' first."
+        echo "Otherwise install MySQL server manually (Ubuntu: 'mysql-server', Fedora: add MySQL YUM repo and install 'mysql-community-server' or install MariaDB with 'mariadb-server'), then rerun this command."
+        exit 1
+    fi
+
     # Attempt to connect with MYSQL_ROOT_PASSWORD
-    if [ ! -z "$MYSQL_ROOT_PASSWORD" ]; then
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
         if $SUDO mysql -u root -p"$MYSQL_ROOT_PASSWORD" < "$AC_PATH_ROOT/data/sql/create/create_mysql.sql" 2>/dev/null; then
             echo "Database created successfully."
             return 0
@@ -82,8 +93,7 @@ function inst_dbCreate() {
 
     # Try with password (interactive mode)
     echo "Please enter your sudo and your MySQL root password if prompted."
-    $SUDO mysql -u root -p < "$AC_PATH_ROOT/data/sql/create/create_mysql.sql"
-    if [ $? -ne 0 ]; then
+    if ! $SUDO mysql -u root -p < "$AC_PATH_ROOT/data/sql/create/create_mysql.sql"; then
         echo "Database creation failed. Please check your MySQL server and credentials."
         exit 1
     fi
@@ -91,17 +101,17 @@ function inst_dbCreate() {
 }
 
 function inst_updateRepo() {
-    cd "$AC_PATH_ROOT"
-    if [ ! -z $INSTALLER_PULL_FROM ]; then
+    cd "$AC_PATH_ROOT" || exit
+    if [ -n "$INSTALLER_PULL_FROM" ]; then
         git pull "$ORIGIN_REMOTE" "$INSTALLER_PULL_FROM"
     else
-        git pull "$ORIGIN_REMOTE" $(git rev-parse --abbrev-ref HEAD)
+        git pull "$ORIGIN_REMOTE" "$(git rev-parse --abbrev-ref HEAD)"
     fi
 }
 
 function inst_resetRepo() {
-    cd "$AC_PATH_ROOT"
-    git reset --hard $(git rev-parse --abbrev-ref HEAD)
+    cd "$AC_PATH_ROOT" || exit
+    git reset --hard "$(git rev-parse --abbrev-ref HEAD)"
     git clean -f
 }
 

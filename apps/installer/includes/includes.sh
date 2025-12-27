@@ -1,6 +1,12 @@
-[[ ${INSTALLER_GUARDYVAR:-} -eq 1 ]] && return || readonly INSTALLER_GUARDYVAR=1 # include it once
+#!/usr/bin/env bash
 
-CURRENT_PATH=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd )
+if [ "${INSTALLER_GUARDYVAR:-0}" -eq 1 ]; then
+    return
+else
+    readonly INSTALLER_GUARDYVAR=1
+fi
+
+CURRENT_PATH=$( cd "$(dirname "${BASH_SOURCE[0]}")" || exit ; pwd )
 
 # shellcheck source=../../bash_shared/includes.sh
 source "$CURRENT_PATH/../../bash_shared/includes.sh"

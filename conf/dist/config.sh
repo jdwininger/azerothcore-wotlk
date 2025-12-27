@@ -18,8 +18,16 @@ BINPATH="$AC_PATH_ROOT/env/dist"
 # This is useful when your MySQL is in a container or another machine.
 SKIP_MYSQL_INSTALL=${SKIP_MYSQL_INSTALL:-false}
 
+# If set to 1 (or "true"), the installer will attempt to install Oracle MySQL
+# server on supported distributions (e.g., on Fedora it adds the MySQL YUM repo
+# and installs the "mysql-community-server" package). If not set, the
+# installer will install MariaDB on Fedora, and Ubuntu already uses MySQL by default.
+# If you prefer to install MySQL manually, leave this unset and ensure MySQL
+# is installed and running before running `./acore.sh setup-db` or `inst_allInOne`.
+INSTALL_MYSQL=${INSTALL_MYSQL:-false}
+
 # When using linux, our installer automatically get information about your distro
-# using lsb_release. If your distro is not supported but it's based on ubuntu or debian,
+# using lsb_release. If your distro is not supported but it's based on ubuntu, debian or fedora,
 # please change it to one of these values.
 # OSDISTRO="ubuntu"
 
