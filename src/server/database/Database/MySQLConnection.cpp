@@ -129,6 +129,7 @@ uint32 MySQLConnection::Open()
 
     if (m_connectionInfo.ssl != "")
     {
+#ifdef MYSQL_OPT_SSL_MODE
         mysql_ssl_mode opt_use_ssl = SSL_MODE_DISABLED;
         if (m_connectionInfo.ssl == "ssl")
         {
@@ -136,6 +137,11 @@ uint32 MySQLConnection::Open()
         }
 
         mysql_options(mysqlInit, MYSQL_OPT_SSL_MODE, (char const*)&opt_use_ssl);
+#else
+        // MySQL client headers on this system do not expose MYSQL_OPT_SSL_MODE or mysql_ssl_mode
+        // (for example, MariaDB client headers). Skip setting SSL mode and log a warning.
+        LOG_WARNING("sql.driver", "MySQL client library does not support SSL mode options; continuing without setting SSL mode");
+#endif
     }
 
     m_Mysql = reinterpret_cast<MySQLHandle*>(mysql_real_connect(mysqlInit, m_connectionInfo.host.c_str(), m_connectionInfo.user.c_str(),
