@@ -140,7 +140,7 @@ uint32 MySQLConnection::Open()
 #else
         // MySQL client headers on this system do not expose MYSQL_OPT_SSL_MODE or mysql_ssl_mode
         // (for example, MariaDB client headers). Skip setting SSL mode and log a warning.
-        LOG_WARNING("sql.driver", "MySQL client library does not support SSL mode options; continuing without setting SSL mode");
+        LOG_INFO("sql.driver", "WARNING: MySQL client library does not support SSL mode options; continuing without setting SSL mode");
 #endif
     }
 
