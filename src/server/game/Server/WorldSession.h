@@ -28,6 +28,7 @@
 #include "CircularBuffer.h"
 #include "Common.h"
 #include "DatabaseEnv.h"
+#include "Duration.h"
 #include "GossipDef.h"
 #include "QueryHolder.h"
 #include "Packet.h"
@@ -57,6 +58,7 @@ struct AuctionEntry;
 struct DeclinedName;
 struct ItemTemplate;
 struct MovementInfo;
+struct TradeStatusInfo;
 
 namespace lfg
 {
@@ -191,12 +193,36 @@ namespace WorldPackets
         class ItemRefund;
     }
 
+    namespace Quest
+    {
+        class QuestPushResultClient;
+        class QuestGiverQuestAutoLaunch;
+        class QuestLogSwapQuest;
+        class QuestLogRemoveQuest;
+        class QuestConfirmAcceptClient;
+        class PushQuestToParty;
+    }
+
     namespace Calendar
     {
         class GetEvent;
         class GuildFilter;
         class ArenaTeam;
         class CalendarComplain;
+    }
+
+    namespace NPC
+    {
+        class Hello;
+        class TrainerBuySpell;
+    }
+
+    namespace Instance
+    {
+        class SetDungeonDifficultyClient;
+        class SetRaidDifficultyClient;
+        class ResetInstances;
+        class InstanceLockResponse;
     }
 }
 
@@ -276,6 +302,20 @@ class LoginQueryHolder : public CharacterDatabaseQueryHolder
         ObjectGuid GetGuid() const { return m_guid; }
         uint32 GetAccountId() const { return m_accountId; }
         bool Initialize();
+};
+
+constexpr Seconds PLAY_TIME_LIMIT_APPROACHING_PARTIAL = Hours(2) + Minutes(30);
+constexpr Seconds PLAY_TIME_LIMIT_PARTIAL             = Hours(3);
+constexpr Seconds PLAY_TIME_LIMIT_APPROACHING_FULL    = Hours(4) + Minutes(30);
+constexpr Seconds PLAY_TIME_LIMIT_FULL                = Hours(5);
+
+enum PlayTimeFlag : uint32
+{
+    PTF_APPROACHING_PARTIAL_PLAY_TIME = 0x1000,
+    PTF_APPROACHING_NO_PLAY_TIME      = 0x2000,
+    PTF_UNK_1                         = 0x20000000,
+    PTF_UNK_2                         = 0x40000000,
+    PTF_UNHEALTHY_TIME                = 0x80000000,
 };
 
 //class to deal with packet processing
@@ -396,6 +436,12 @@ public:
     void ValidateAccountFlags();
 
     bool IsGMAccount() const;
+    bool IsTrialAccount() const;
+    bool IsInternetGameRoomAccount() const;
+    bool IsRecurringBillingAccount() const;
+    bool IsAffectedByCAIS() const;
+
+    uint8 GetBillingPlanFlags() const;
 
     bool PlayerLoading() const { return m_playerLoading; }
     bool PlayerLogout() const { return m_playerLogout; }
@@ -439,6 +485,16 @@ public:
 
     AccountTypes GetSecurity() const { return _security; }
     bool CanSkipQueue() const { return _skipQueue; }
+
+    // RBAC
+    rbac::RBACData* GetRBACData() const { return _RBACData; }
+    bool HasPermission(uint32 permissionId);
+    void LoadPermissions();
+    QueryCallback LoadPermissionsAsync();
+    void InvalidateRBACData();
+
+    /// For unit testing - initializes RBAC data without database access
+    void InitRBACDataForTest();
     uint32 GetAccountId() const { return _accountId; }
     Player* GetPlayer() const { return _player; }
     std::string const& GetPlayerName() const;
@@ -462,6 +518,16 @@ public:
     /// Session in auth.queue currently
     void SetInQueue(bool state) { m_inQueue = state; }
 
+    // Playtime limit
+    Seconds GetCreateTime() const { return _createTime; }
+    // Measured from session creation (authentication), so login queue and character select count
+    // toward the limits. Matches the VMaNGOS behaviour this is ported from.
+    Seconds GetConsecutivePlayTime(Seconds now) const { return (now - _createTime) + _previousPlayTime; }
+    Seconds GetPreviousPlayedTime() const { return _previousPlayTime; }
+    void SetPreviousPlayedTime(Seconds playedTime) { _previousPlayTime = playedTime; }
+    void CheckPlayedTimeLimit(Seconds now);
+    void SendPlayTimeWarning(PlayTimeFlag flag, int32 playTimeRemaining);
+
     /// Is the user engaged in a log out process?
     bool isLogingOut() const { return _logoutTime || m_playerLogout; }
 
@@ -477,7 +543,7 @@ public:
         return (_logoutTime > 0 && currTime >= _logoutTime + 20);
     }
 
-    void LogoutPlayer(bool save);
+    void LogoutPlayer(bool save, bool redirecting = false);
     void KickPlayer(bool setKicked = true) { return this->KickPlayer("Unknown reason", setKicked); }
     void KickPlayer(std::string const& reason, bool setKicked = true);
 
@@ -497,8 +563,7 @@ public:
     //void SendTestCreatureQueryOpcode(uint32 entry, ObjectGuid guid, uint32 testvalue);
     void SendNameQueryOpcode(ObjectGuid guid);
 
-    void SendTrainerList(ObjectGuid guid);
-    void SendTrainerList(ObjectGuid guid, std::string const& strTitle);
+    void SendTrainerList(Creature* npc);
     void SendListInventory(ObjectGuid guid, uint32 vendorEntry = 0);
     void SendShowBank(ObjectGuid guid);
     bool CanOpenMailBox(ObjectGuid guid);
@@ -507,11 +572,9 @@ public:
     void SendSpiritResurrect();
     void SendBindPoint(Creature* npc);
 
-    void SendAttackStop(Unit const* enemy);
-
     void SendBattleGroundList(ObjectGuid guid, BattlegroundTypeId bgTypeId = BATTLEGROUND_RB);
 
-    void SendTradeStatus(TradeStatus status);
+    void SendTradeStatus(TradeStatusInfo const& info);
     void SendUpdateTrade(bool trader_data = true);
     void SendCancelTrade(TradeStatus status);
 
@@ -642,6 +705,8 @@ public:                                                 // opcodes handlers
     void SendCharCustomize(ResponseCodes result, CharacterCustomizeInfo const* customizeInfo);
     void SendCharFactionChange(ResponseCodes result, CharacterFactionChangeInfo const* factionChangeInfo);
     void SendSetPlayerDeclinedNamesResult(DeclinedNameResult result, ObjectGuid guid);
+
+    void HandleTC9PrepareForRedirect(WorldPacket& recvData);
 
     // played time
     void HandlePlayedTime(WorldPackets::Character::PlayedTimeClient& packet);
@@ -804,8 +869,8 @@ public:                                                 // opcodes handlers
     void SendActivateTaxiReply(ActivateTaxiReply reply);
 
     void HandleTabardVendorActivateOpcode(WorldPacket& recvPacket);
-    void HandleTrainerListOpcode(WorldPacket& recvPacket);
-    void HandleTrainerBuySpellOpcode(WorldPacket& recvPacket);
+    void HandleTrainerListOpcode(WorldPackets::NPC::Hello& packet);
+    void HandleTrainerBuySpellOpcode(WorldPackets::NPC::TrainerBuySpell& packet);
     void HandlePetitionShowListOpcode(WorldPacket& recvPacket);
     void HandleGossipHelloOpcode(WorldPacket& recvPacket);
     void HandleGossipSelectOptionOpcode(WorldPacket& recvPacket);
@@ -905,13 +970,13 @@ public:                                                 // opcodes handlers
     void HandleQuestgiverRequestRewardOpcode(WorldPacket& recvPacket);
     void HandleQuestQueryOpcode(WorldPacket& recvPacket);
     void HandleQuestgiverCancel(WorldPacket& recvData);
-    void HandleQuestLogSwapQuest(WorldPacket& recvData);
-    void HandleQuestLogRemoveQuest(WorldPacket& recvData);
-    void HandleQuestConfirmAccept(WorldPacket& recvData);
+    void HandleQuestLogSwapQuest(WorldPackets::Quest::QuestLogSwapQuest& packet);
+    void HandleQuestLogRemoveQuest(WorldPackets::Quest::QuestLogRemoveQuest& packet);
+    void HandleQuestConfirmAccept(WorldPackets::Quest::QuestConfirmAcceptClient& packet);
     void HandleQuestgiverCompleteQuest(WorldPacket& recvData);
-    void HandleQuestgiverQuestAutoLaunch(WorldPacket& recvPacket);
-    void HandlePushQuestToParty(WorldPacket& recvPacket);
-    void HandleQuestPushResult(WorldPacket& recvPacket);
+    void HandleQuestgiverQuestAutoLaunch(WorldPackets::Quest::QuestGiverQuestAutoLaunch& packet);
+    void HandlePushQuestToParty(WorldPackets::Quest::PushQuestToParty& packet);
+    void HandleQuestPushResult(WorldPackets::Quest::QuestPushResultClient& packet);
 
     void HandleMessagechatOpcode(WorldPacket& recvPacket);
     void SendPlayerNotFoundNotice(std::string const& name);
@@ -997,16 +1062,16 @@ public:                                                 // opcodes handlers
     void HandleMinimapPingOpcode(WorldPackets::Misc::MinimapPingClient& packet);
     void HandleRandomRollOpcode(WorldPackets::Misc::RandomRollClient& packet);
     void HandleFarSightOpcode(WorldPacket& recvData);
-    void HandleSetDungeonDifficultyOpcode(WorldPacket& recvData);
-    void HandleSetRaidDifficultyOpcode(WorldPacket& recvData);
+    void HandleSetDungeonDifficultyOpcode(WorldPackets::Instance::SetDungeonDifficultyClient& packet);
+    void HandleSetRaidDifficultyOpcode(WorldPackets::Instance::SetRaidDifficultyClient& packet);
     void HandleMoveFlagChangeOpcode(WorldPacket& recvData);
     void HandleSetTitleOpcode(WorldPacket& recvData);
     void HandleRealmSplitOpcode(WorldPacket& recvData);
     void HandleTimeSyncResp(WorldPacket& recvData);
     void HandleWhoisOpcode(WorldPacket& recvData);
-    void HandleResetInstancesOpcode(WorldPacket& recvData);
+    void HandleResetInstancesOpcode(WorldPackets::Instance::ResetInstances& packet);
     void HandleHearthAndResurrect(WorldPacket& recvData);
-    void HandleInstanceLockResponse(WorldPacket& recvPacket);
+    void HandleInstanceLockResponse(WorldPackets::Instance::InstanceLockResponse& packet);
     void HandleUpdateMissileTrajectory(WorldPacket& recvPacket);
 
     // Battlefield
@@ -1138,7 +1203,6 @@ public:                                                 // opcodes handlers
     void HandleEnterPlayerVehicle(WorldPacket& data);
     void HandleUpdateProjectilePosition(WorldPacket& recvPacket);
 
-    void HandleTeleportTimeout(bool updateInSessions);
     bool HandleSocketClosed();
     void SetOfflineTime(uint32 time) { _offlineTime = time; }
     uint32 GetOfflineTime() const { return _offlineTime; }
@@ -1213,7 +1277,7 @@ private:
     bool recoveryItem(Item* pItem);
 
     // logging helper
-    void LogUnexpectedOpcode(WorldPacket* packet, char const* status, const char* reason);
+    void LogUnexpectedOpcode(WorldPacket* packet, char const* status, char const* reason);
     void LogUnprocessedTail(WorldPacket* packet);
 
     // EnumData helpers
@@ -1234,6 +1298,7 @@ private:
     AccountTypes _security;
     bool _skipQueue;
     uint32 _accountId;
+    rbac::RBACData* _RBACData;
     std::string _accountName;
     uint32 _accountFlags;
     uint8 m_expansion;
@@ -1244,6 +1309,9 @@ private:
     // Warden
     std::unique_ptr<Warden> _warden;                    // Remains nullptr if Warden system is not enabled by config
 
+    Seconds _lastUpdateTime;                            // last time session was updated by world
+    Seconds _createTime;                                // when session was created
+    Seconds _previousPlayTime;                          // play time from previous session less than 5 hours ago
     time_t _logoutTime;
     bool m_inQueue;                                     // session wait in auth.queue
     bool m_playerLoading;                               // code processed in LoginPlayer

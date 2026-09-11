@@ -20,10 +20,111 @@
 #include "DetourCommon.h"
 #include "Geometry.h"
 #include "Log.h"
-#include "MMapFactory.h"
 #include "MMapMgr.h"
 #include "Map.h"
 #include "Metric.h"
+#ifdef MOD_PLAYERBOTS
+#include "Player.h"
+#include "WorldSession.h"
+#endif
+
+// Blades Edge Arena Ropes normalization
+namespace
+{
+    constexpr float BLADE_EDGE_ROPE_SNAP_DIST = 1.5f;
+    constexpr float BLADE_EDGE_ROPE_SNAP_DIST2 = BLADE_EDGE_ROPE_SNAP_DIST * BLADE_EDGE_ROPE_SNAP_DIST;
+
+    struct BladeEdgeArenaRope
+    {
+        G3D::Vector3 Start;
+        G3D::Vector3 End;
+        float Sag;
+    };
+
+    static const std::array<BladeEdgeArenaRope, 2> BladeEdgeArenaRopes =
+    {{
+        {
+            {6243.1523f, 267.53094f, 10.929295f},
+            {6245.9717f, 271.29346f, 10.879172f},
+            0.43f
+        },
+        {
+            {6234.3213f, 256.29733f, 11.002348f},
+            {6231.3247f, 252.58781f, 10.976968f},
+            0.46f
+        }
+    }};
+
+    bool IsOutsideExpandedXYBounds(G3D::Vector3 const& point, BladeEdgeArenaRope const& rope)
+    {
+        float const minX = std::min(rope.Start.x, rope.End.x) - BLADE_EDGE_ROPE_SNAP_DIST;
+        float const maxX = std::max(rope.Start.x, rope.End.x) + BLADE_EDGE_ROPE_SNAP_DIST;
+        float const minY = std::min(rope.Start.y, rope.End.y) - BLADE_EDGE_ROPE_SNAP_DIST;
+        float const maxY = std::max(rope.Start.y, rope.End.y) + BLADE_EDGE_ROPE_SNAP_DIST;
+
+        return point.x < minX || point.x > maxX || point.y < minY || point.y > maxY;
+    }
+
+    bool GetClosestPointOnBladeEdgeArenaRope(G3D::Vector3 const& point, BladeEdgeArenaRope const& rope, G3D::Vector3& closestPoint)
+    {
+        G3D::Vector3 const ropeVector = rope.End - rope.Start;
+
+        float const ropeLength2XY = ropeVector.x * ropeVector.x + ropeVector.y * ropeVector.y;
+        if (ropeLength2XY < 0.00001f)
+            return false;
+
+        G3D::Vector3 const pointVector = point - rope.Start;
+
+        float t = (pointVector.x * ropeVector.x + pointVector.y * ropeVector.y) / ropeLength2XY;
+        t = std::clamp(t, 0.0f, 1.0f);
+
+        float const closestX = rope.Start.x + ropeVector.x * t;
+        float const closestY = rope.Start.y + ropeVector.y * t;
+
+        float const dx = point.x - closestX;
+        float const dy = point.y - closestY;
+
+        // If the point is already too far in XY, it cannot be within the 3D snap radius.
+        if (dx * dx + dy * dy >= BLADE_EDGE_ROPE_SNAP_DIST2)
+            return false;
+
+        float const linearZ = rope.Start.z + (rope.End.z - rope.Start.z) * t;
+        float const sagZ = rope.Sag * std::sin(M_PI * t);
+
+        closestPoint = { closestX, closestY, linearZ - sagZ };
+        return true;
+    }
+
+    bool TrySnapToBladeEdgeArenaRope(G3D::Vector3& point)
+    {
+        bool snapped = false;
+        float bestDist2 = BLADE_EDGE_ROPE_SNAP_DIST2;
+        G3D::Vector3 bestPoint;
+
+        for (BladeEdgeArenaRope const& rope : BladeEdgeArenaRopes)
+        {
+            if (IsOutsideExpandedXYBounds(point, rope))
+                continue;
+
+            G3D::Vector3 closestPoint;
+            if (!GetClosestPointOnBladeEdgeArenaRope(point, rope, closestPoint))
+                continue;
+
+            float const dist2 = (point - closestPoint).squaredLength();
+            if (dist2 < bestDist2)
+            {
+                bestDist2 = dist2;
+                bestPoint = closestPoint;
+                snapped = true;
+            }
+        }
+
+        if (snapped)
+            point = bestPoint;
+
+        return snapped;
+    }
+}
 
  ////////////////// PathGenerator //////////////////
 PathGenerator::PathGenerator(WorldObject const* owner) :
@@ -34,12 +135,10 @@ PathGenerator::PathGenerator(WorldObject const* owner) :
 {
     memset(_pathPolyRefs, 0, sizeof(_pathPolyRefs));
 
-    uint32 mapId = _source->GetMapId();
     //if (sDisableMgr->IsPathfindingEnabled(_sourceUnit->FindMap()))
     {
-        MMAP::MMapMgr* mmap = MMAP::MMapFactory::createOrGetMMapMgr();
-        _navMesh = mmap->GetNavMesh(mapId);
-        _navMeshQuery = mmap->GetNavMeshQuery(mapId, _source->GetInstanceId());
+        _navMesh = _source->GetMap()->GetMapCollisionData().GetMMapData().GetNavMesh();
+        _navMeshQuery = _source->GetMap()->GetMapCollisionData().GetMMapData().GetNavMeshQuery();
     }
 
     CreateFilter();
@@ -211,8 +310,8 @@ void PathGenerator::BuildPolyPath(G3D::Vector3 const& startPos, G3D::Vector3 con
     {
         bool buildShortcut = false;
 
-        auto liquidDataStart = _source->GetMap()->GetLiquidData(_source->GetPhaseMask(), startPos.x, startPos.y, startPos.z, _source->GetCollisionHeight(), MAP_ALL_LIQUIDS);
-        auto liquidDataEnd = _source->GetMap()->GetLiquidData(_source->GetPhaseMask(), endPos.x, endPos.y, endPos.z, _source->GetCollisionHeight(), MAP_ALL_LIQUIDS);
+        auto liquidDataStart = _source->GetMap()->GetLiquidData(_source->GetPhaseMask(), startPos.x, startPos.y, startPos.z, _source->GetCollisionHeight(), {});
+        auto liquidDataEnd = _source->GetMap()->GetLiquidData(_source->GetPhaseMask(), endPos.x, endPos.y, endPos.z, _source->GetCollisionHeight(), {});
 
         bool startUnderWaterEndInWater = liquidDataStart.Status == LIQUID_MAP_UNDER_WATER &&
                                          (liquidDataEnd.Status & MAP_LIQUID_STATUS_IN_CONTACT) != 0;
@@ -517,7 +616,7 @@ void PathGenerator::BuildPolyPath(G3D::Vector3 const& startPos, G3D::Vector3 con
     BuildPointPath(startPoint, endPoint);
 }
 
-void PathGenerator::BuildPointPath(const float* startPoint, const float* endPoint)
+void PathGenerator::BuildPointPath(float const* startPoint, float const* endPoint)
 {
     float pathPoints[MAX_POINT_PATH_LENGTH * VERTEX_SIZE];
     uint32 pointCount = 0;
@@ -625,9 +724,13 @@ void PathGenerator::BuildPointPath(const float* startPoint, const float* endPoin
 
 void PathGenerator::NormalizePath()
 {
-    for (uint32 i = 0; i < _pathPoints.size(); ++i)
+    bool const snapBladeEdgeArenaRopes = _source->GetMapId() == MAP_BLADES_EDGE_ARENA;
+    for (G3D::Vector3& point : _pathPoints)
     {
-        _source->UpdateAllowedPositionZ(_pathPoints[i].x, _pathPoints[i].y, _pathPoints[i].z);
+        if (snapBladeEdgeArenaRopes && TrySnapToBladeEdgeArenaRope(point))
+            continue;
+
+        _source->UpdateAllowedPositionZ(point.x, point.y, point.z);
     }
 }
 
@@ -651,12 +754,15 @@ void PathGenerator::CreateFilter()
 {
     uint16 includeFlags = 0;
     uint16 excludeFlags = 0;
+#ifdef MOD_PLAYERBOTS
+    bool isBot = false;
+#endif
 
     if (_source->IsCreature())
     {
         Creature* creature = (Creature*)_source;
         if (creature->CanWalk())
-            includeFlags |= NAV_GROUND;          // walk
+            includeFlags |= (NAV_GROUND | NAV_GROUND_STEEP);
 
         // creatures don't take environmental damage
         if (creature->CanEnterWater())
@@ -664,12 +770,35 @@ void PathGenerator::CreateFilter()
     }
     else // assume Player
     {
-        // perfect support not possible, just stay 'safe'
-        includeFlags |= (NAV_GROUND | NAV_WATER | NAV_MAGMA);
+#ifdef MOD_PLAYERBOTS
+        // Bots navigate with a stricter filter: include ground + water but exclude lava/slime and
+        // NAV_GROUND_STEEP (the 50-60deg slopes the extractor tags via modAlmostUnwalkableTriangles), so
+        // they keep off steep mountainsides and follow gentle ground/roads. Real players are unchanged and
+        // may still path across steep terrain.
+        Player const* player = _source->ToPlayer();
+        if (player && player->GetSession() && player->GetSession()->IsBot())
+        {
+            includeFlags |= (NAV_GROUND | NAV_WATER);
+            excludeFlags |= (NAV_MAGMA | NAV_SLIME | NAV_GROUND_STEEP);
+            isBot = true;
+        }
+        else
+#endif
+        {
+            // perfect support not possible, just stay 'safe'
+            includeFlags |= (NAV_GROUND | NAV_GROUND_STEEP | NAV_WATER | NAV_MAGMA);
+        }
     }
 
     _filter.setIncludeFlags(includeFlags);
     _filter.setExcludeFlags(excludeFlags);
+
+#ifdef MOD_PLAYERBOTS
+    // Bots bias their routes away from deep water (swim only when necessary). poly.area == poly.flags ==
+    // NavTerrain, so NAV_WATER doubles as the water area index. Real players and creatures assign no cost.
+    if (isBot)
+        _filter.setAreaCost(NAV_WATER, 20.0f);
+#endif
 
     UpdateFilter();
 }
@@ -698,7 +827,7 @@ void PathGenerator::UpdateFilter()
 
 NavTerrain PathGenerator::GetNavTerrain(float x, float y, float z) const
 {
-    LiquidData const& liquidData = _source->GetMap()->GetLiquidData(_source->GetPhaseMask(), x, y, z, _source->GetCollisionHeight(), MAP_ALL_LIQUIDS);
+    LiquidData const& liquidData = _source->GetMap()->GetLiquidData(_source->GetPhaseMask(), x, y, z, _source->GetCollisionHeight(), {});
     if (liquidData.Status == LIQUID_MAP_NO_WATER)
         return NAV_GROUND;
 
@@ -715,7 +844,7 @@ NavTerrain PathGenerator::GetNavTerrain(float x, float y, float z) const
     }
 }
 
-bool PathGenerator::HaveTile(const G3D::Vector3& p) const
+bool PathGenerator::HaveTile(G3D::Vector3 const& p) const
 {
     int tx = -1, ty = -1;
     float point[VERTEX_SIZE] = { p.y, p.z, p.x };

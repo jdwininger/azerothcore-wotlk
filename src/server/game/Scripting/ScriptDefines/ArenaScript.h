@@ -29,6 +29,9 @@ enum ArenaHook
     ARENAHOOK_CAN_SAVE_TO_DB,
     ARENAHOOK_ON_BEFORE_CHECK_WIN_CONDITION,
     ARENAHOOK_ON_ARENA_START,
+    ARENAHOOK_ON_BEFORE_TEAM_MEMBER_UPDATE,
+    ARENAHOOK_CAN_SAVE_ARENA_STATS_FOR_MEMBER,
+    ARENAHOOK_ON_GET_START_PERSONAL_RATING,
     ARENAHOOK_END
 };
 
@@ -36,7 +39,7 @@ class ArenaScript : public ScriptObject
 {
 protected:
 
-    ArenaScript(const char* name, std::vector<uint16> enabledHooks = std::vector<uint16>());
+    ArenaScript(char const* name, std::vector<uint16> enabledHooks = std::vector<uint16>());
 
 public:
 
@@ -51,6 +54,14 @@ public:
     [[nodiscard]] virtual bool CanSaveToDB(ArenaTeam* /*team*/) { return true; }
 
     virtual void OnArenaStart(Battleground* /* bg */) { };
+
+    [[nodiscard]] virtual bool OnBeforeArenaTeamMemberUpdate(ArenaTeam* /*team*/, Player* /*player*/, bool /*won*/, uint32 /*opponentMatchmakerRating*/, int32 /*matchmakerChange*/) { return false; }
+
+    [[nodiscard]] virtual bool CanSaveArenaStatsForMember(ArenaTeam* /*team*/, ObjectGuid /*playerGuid*/) { return true; }
+
+    // Called with the personal rating the core computed for a player joining the team, before it is
+    // stored on the member and written to arena_team_member.
+    virtual void OnGetStartPersonalRating(ArenaTeam* /*team*/, ObjectGuid /*playerGuid*/, uint32& /*personalRating*/) { }
 };
 
 #endif

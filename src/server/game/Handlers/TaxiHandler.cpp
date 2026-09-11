@@ -36,14 +36,15 @@ void WorldSession::SendTaxiStatus(ObjectGuid guid)
 {
     Player* const player = GetPlayer();
     Creature* unit = ObjectAccessor::GetCreature(*player, guid);
-    if (!unit || unit->IsHostileTo(player) || !unit->HasNpcFlag(UNIT_NPC_FLAG_FLIGHTMASTER))
+    // reaction must be checked both ways: the Dark Portal flight masters are neutral toward opposite-faction players, while players are hostile toward them
+    if (!unit || unit->GetReactionTo(player) <= REP_UNFRIENDLY || player->IsHostileTo(unit) || !unit->HasNpcFlag(UNIT_NPC_FLAG_FLIGHTMASTER))
     {
         LOG_DEBUG("network", "WorldSession::SendTaxiStatus - Unit ({}) not found.", guid.ToString());
         return;
     }
 
     // find taxi node
-    uint32 nearest = sObjectMgr->GetNearestTaxiNode(unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), unit->GetMapId(), player->GetTeamId());
+    uint32 nearest = sObjectMgr->GetNearestTaxiNode(*unit, player->GetTeamId(true));
     if (!nearest)
     {
         return;
@@ -84,7 +85,7 @@ void WorldSession::HandleTaxiQueryAvailableNodes(WorldPacket& recvData)
 void WorldSession::SendTaxiMenu(Creature* unit)
 {
     // find current node
-    uint32 curloc = sObjectMgr->GetNearestTaxiNode(unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), unit->GetMapId(), GetPlayer()->GetTeamId());
+    uint32 curloc = sObjectMgr->GetNearestTaxiNode(*unit, GetPlayer()->GetTeamId(true));
 
     if (curloc == 0)
         return;
@@ -127,7 +128,7 @@ void WorldSession::SendDoFlight(uint32 mountDisplayId, uint32 path, uint32 pathN
 bool WorldSession::SendLearnNewTaxiNode(Creature* unit)
 {
     // find current node
-    uint32 curloc = sObjectMgr->GetNearestTaxiNode(unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), unit->GetMapId(), GetPlayer()->GetTeamId());
+    uint32 curloc = sObjectMgr->GetNearestTaxiNode(*unit, GetPlayer()->GetTeamId(true));
 
     if (curloc == 0)
         return true;                                        // `true` send to avoid WorldSession::SendTaxiMenu call with one more curlock seartch with same false result.
@@ -142,6 +143,8 @@ bool WorldSession::SendLearnNewTaxiNode(Creature* unit)
         update << uint8(1);
         SendPacket(&update);
 
+        sScriptMgr->OnPlayerLearnTaxiNode(GetPlayer(), curloc);
+
         return true;
     }
     else
@@ -154,6 +157,8 @@ void WorldSession::SendDiscoverNewTaxiNode(uint32 nodeid)
     {
         WorldPacket msg(SMSG_NEW_TAXI_PATH, 0);
         SendPacket(&msg);
+
+        sScriptMgr->OnPlayerLearnTaxiNode(GetPlayer(), nodeid);
     }
 }
 

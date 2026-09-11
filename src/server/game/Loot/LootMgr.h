@@ -178,7 +178,7 @@ struct LootItem
     // Basic checks for player/item compatibility - if false no chance to see the item in the loot
     bool AllowedForPlayer(Player const* player, ObjectGuid source) const;
     void AddAllowedLooter(Player const* player);
-    [[nodiscard]] const AllowedLooterSet& GetAllowedLooters() const { return allowedGUIDs; }
+    [[nodiscard]] AllowedLooterSet const& GetAllowedLooters() const { return allowedGUIDs; }
 };
 
 struct QuestItem
@@ -218,8 +218,8 @@ public:
     void CheckLootRefs(LootIdSet* ref_set = nullptr) const; // check existence reference and remove it from ref_set
     void ReportUnusedIds(LootIdSet const& ids_set) const;
     void ReportNonExistingId(uint32 lootId) const;
-    void ReportNonExistingId(uint32 lootId, const char* ownerType, uint32 ownerId) const;
-    void ReportInvalidCount(uint32 lootId, const char* ownerType, uint32 ownerId, uint32 itemId, uint8 minCount, uint8 maxCount) const;
+    void ReportNonExistingId(uint32 lootId, char const* ownerType, uint32 ownerId) const;
+    void ReportInvalidCount(uint32 lootId, char const* ownerType, uint32 ownerId, uint32 itemId, uint8 minCount, uint8 maxCount) const;
 
     [[nodiscard]] bool HaveLootFor(uint32 loot_id) const { return m_LootTemplates.find(loot_id) != m_LootTemplates.end(); }
     [[nodiscard]] bool HaveQuestLootFor(uint32 loot_id) const;
@@ -258,9 +258,9 @@ public:
     bool CopyConditions(LootItem* li, uint32 conditionLootId = 0) const;
 
     // True if template includes at least 1 quest drop entry
-    [[nodiscard]] bool HasQuestDrop(LootTemplateMap const& store, uint8 groupId = 0) const;
+    [[nodiscard]] bool HasQuestDrop(LootTemplateMap const& store) const;
     // True if template includes at least 1 quest drop for an active quest of the player
-    bool HasQuestDropForPlayer(LootTemplateMap const& store, Player const* player, uint8 groupId = 0) const;
+    bool HasQuestDropForPlayer(LootTemplateMap const& store, Player const* player) const;
 
     // Checks integrity of the template
     void Verify(LootStore const& store, uint32 Id) const;

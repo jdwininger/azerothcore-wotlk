@@ -18,6 +18,9 @@
 #include "PlayerScript.h"
 #include "ScriptMgr.h"
 #include "ScriptMgrMacros.h"
+#include "World.h"
+
+#include <algorithm>
 
 void ScriptMgr::OnPlayerBeforeDurabilityRepair(Player* player, ObjectGuid npcGUID, ObjectGuid itemGUID, float& discountMod, uint8 guildBank)
 {
@@ -29,7 +32,7 @@ void ScriptMgr::OnPlayerGossipSelect(Player* player, uint32 menu_id, uint32 send
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_GOSSIP_SELECT, script->OnPlayerGossipSelect(player, menu_id, sender, action));
 }
 
-void ScriptMgr::OnPlayerGossipSelectCode(Player* player, uint32 menu_id, uint32 sender, uint32 action, const char* code)
+void ScriptMgr::OnPlayerGossipSelectCode(Player* player, uint32 menu_id, uint32 sender, uint32 action, char const* code)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_GOSSIP_SELECT_CODE, script->OnPlayerGossipSelectCode(player, menu_id, sender, action, code));
 }
@@ -109,6 +112,11 @@ void ScriptMgr::OnPlayerTalentsReset(Player* player, bool noCost)
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_TALENTS_RESET, script->OnPlayerTalentsReset(player, noCost));
 }
 
+bool ScriptMgr::OnPlayerCanLearnTalent(Player* player, TalentEntry const* talent, uint32 rank)
+{
+    CALL_ENABLED_BOOLEAN_HOOKS(PlayerScript, PLAYERHOOK_CAN_LEARN_TALENT, !script->OnPlayerCanLearnTalent(player, talent, rank));
+}
+
 void ScriptMgr::OnPlayerAfterSpecSlotChanged(Player* player, uint8 newSlot)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_AFTER_SPEC_SLOT_CHANGED, script->OnPlayerAfterSpecSlotChanged(player, newSlot));
@@ -122,6 +130,11 @@ void ScriptMgr::OnPlayerMoneyChanged(Player* player, int32& amount)
 void ScriptMgr::OnPlayerBeforeLootMoney(Player* player, Loot* loot)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_BEFORE_LOOT_MONEY, script->OnPlayerBeforeLootMoney(player, loot));
+}
+
+void ScriptMgr::OnPlayerBeforeSendLoot(Player* player, ObjectGuid lootGuid, Loot* loot)
+{
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_BEFORE_SEND_LOOT, script->OnPlayerBeforeSendLoot(player, lootGuid, loot));
 }
 
 void ScriptMgr::OnPlayerGiveXP(Player* player, uint32& amount, Unit* victim, uint8 xpSource)
@@ -169,34 +182,9 @@ void ScriptMgr::OnPlayerDuelEnd(Player* winner, Player* loser, DuelCompleteType 
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_DUEL_END, script->OnPlayerDuelEnd(winner, loser, type));
 }
 
-void ScriptMgr::OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& msg)
-{
-    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_CHAT, script->OnPlayerChat(player, type, lang, msg));
-}
-
 void ScriptMgr::OnPlayerBeforeSendChatMessage(Player* player, uint32& type, uint32& lang, std::string& msg)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_BEFORE_SEND_CHAT_MESSAGE, script->OnPlayerBeforeSendChatMessage(player, type, lang, msg));
-}
-
-void ScriptMgr::OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& msg, Player* receiver)
-{
-    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_CHAT_WITH_RECEIVER, script->OnPlayerChat(player, type, lang, msg, receiver));
-}
-
-void ScriptMgr::OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& msg, Group* group)
-{
-    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_CHAT_WITH_GROUP, script->OnPlayerChat(player, type, lang, msg, group));
-}
-
-void ScriptMgr::OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& msg, Guild* guild)
-{
-    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_CHAT_WITH_GUILD, script->OnPlayerChat(player, type, lang, msg, guild));
-}
-
-void ScriptMgr::OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& msg, Channel* channel)
-{
-    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_CHAT_WITH_CHANNEL, script->OnPlayerChat(player, type, lang, msg, channel));
 }
 
 void ScriptMgr::OnPlayerEmote(Player* player, uint32 emote)
@@ -358,6 +346,11 @@ void ScriptMgr::OnPlayerAfterMoveItemFromInventory(Player* player, Item* it, uin
 void ScriptMgr::OnPlayerEquip(Player* player, Item* it, uint8 bag, uint8 slot, bool update)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_EQUIP, script->OnPlayerEquip(player, it, bag, slot, update));
+}
+
+void ScriptMgr::OnPlayerUnequip(Player* player, Item* it)
+{
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_UNEQUIP_ITEM, script->OnPlayerUnequip(player, it));
 }
 
 void ScriptMgr::OnPlayerJoinBG(Player* player)
@@ -625,12 +618,12 @@ bool ScriptMgr::OnPlayerCanAreaExploreAndOutdoor(Player* player)
     CALL_ENABLED_BOOLEAN_HOOKS(PlayerScript, PLAYERHOOK_CAN_AREA_EXPLORE_AND_OUTDOOR, !script->OnPlayerCanAreaExploreAndOutdoor(player));
 }
 
-void ScriptMgr::OnPlayerVictimRewardBefore(Player* player, Player* victim, uint32& killer_title, uint32& victim_title)
+void ScriptMgr::OnPlayerVictimRewardBefore(Player* player, Player* victim, uint32& killer_title, int32& victim_rank)
 {
-    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_VICTIM_REWARD_BEFORE, script->OnPlayerVictimRewardBefore(player, victim, killer_title, victim_title));
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_VICTIM_REWARD_BEFORE, script->OnPlayerVictimRewardBefore(player, victim, killer_title, victim_rank));
 }
 
-void ScriptMgr::OnPlayerVictimRewardAfter(Player* player, Player* victim, uint32& killer_title, uint32& victim_rank, float& honor_f)
+void ScriptMgr::OnPlayerVictimRewardAfter(Player* player, Player* victim, uint32& killer_title, int32& victim_rank, float& honor_f)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_VICTIM_REWARD_AFTER, script->OnPlayerVictimRewardAfter(player, victim, killer_title, victim_rank, honor_f));
 }
@@ -785,7 +778,7 @@ bool ScriptMgr::OnPlayerNotSetArenaTeamInfoField(Player* player, uint8 slot, Are
     CALL_ENABLED_BOOLEAN_HOOKS(PlayerScript, PLAYERHOOK_NOT_SET_ARENA_TEAM_INFO_FIELD, !script->OnPlayerNotSetArenaTeamInfoField(player, slot, type, value));
 }
 
-bool ScriptMgr::OnPlayerCanJoinLfg(Player* player, uint8 roles, lfg::LfgDungeonSet& dungeons, const std::string& comment)
+bool ScriptMgr::OnPlayerCanJoinLfg(Player* player, uint8 roles, lfg::LfgDungeonSet& dungeons, std::string const& comment)
 {
     CALL_ENABLED_BOOLEAN_HOOKS(PlayerScript, PLAYERHOOK_CAN_JOIN_LFG, !script->OnPlayerCanJoinLfg(player, roles, dungeons, comment));
 }
@@ -815,7 +808,7 @@ void ScriptMgr::OnPlayerSetServerSideVisibilityDetect(Player* player, ServerSide
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_SET_SERVER_SIDE_VISIBILITY_DETECT, script->OnPlayerSetServerSideVisibilityDetect(player, type, sec));
 }
 
-void ScriptMgr::OnPlayerResurrect(Player* player, float restore_percent, bool applySickness)
+void ScriptMgr::OnPlayerResurrect(Player* player, float restore_percent, bool& applySickness)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_PLAYER_RESURRECT, script->OnPlayerResurrect(player, restore_percent, applySickness));
 }
@@ -870,6 +863,11 @@ void ScriptMgr::OnPlayerQuestAbandon(Player* player, uint32 questId)
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_QUEST_ABANDON, script->OnPlayerQuestAbandon(player, questId));
 }
 
+void ScriptMgr::OnPlayerQuestAccept(Player* player, Quest const* quest)
+{
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_PLAYER_QUEST_ACCEPT, script->OnPlayerQuestAccept(player, quest));
+}
+
 // Player anti cheat
 void ScriptMgr::AnticheatSetCanFlybyServer(Player* player, bool apply)
 {
@@ -921,6 +919,11 @@ void ScriptMgr::OnPlayerUpdateSkill(Player* player, uint32 skillId, uint32 value
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_UPDATE_SKILL, script->OnPlayerUpdateSkill(player, skillId, value, max, step, newValue));
 }
 
+void ScriptMgr::OnPlayerSetSkill(Player* player, uint32 skillId, uint32 value, uint32 max, uint32 step, uint32 newValue)
+{
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_SET_SKILL, script->OnPlayerSetSkill(player, skillId, value, max, step, newValue));
+}
+
 bool ScriptMgr::OnPlayerCanResurrect(Player* player)
 {
     CALL_ENABLED_BOOLEAN_HOOKS(PlayerScript, PLAYERHOOK_CAN_RESURRECT, !script->OnPlayerCanResurrect(player));
@@ -936,7 +939,28 @@ void ScriptMgr::OnPlayerSendListInventory(Player* player, ObjectGuid vendorGuid,
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_SEND_LIST_INVENTORY, script->OnPlayerSendListInventory(player, vendorGuid, vendorEntry));
 }
 
-PlayerScript::PlayerScript(const char* name, std::vector<uint16> enabledHooks)
+void ScriptMgr::OnPlayerGetReputationPriceDiscount(Player const* player, Creature const* creature, float& discount)
+{
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_GET_REPUTATION_PRICE_DISCOUNT, script->OnPlayerGetReputationPriceDiscount(player, creature, discount));
+}
+
+void ScriptMgr::OnPlayerGetReputationPriceDiscount(Player const* player, FactionTemplateEntry const* factionTemplate, float& discount)
+{
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_GET_REPUTATION_PRICE_DISCOUNT, script->OnPlayerGetReputationPriceDiscount(player, factionTemplate, discount));
+}
+
+void ScriptMgr::OnPlayerLearnTaxiNode(Player const* player, uint32 nodeId)
+{
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_LEARN_TAXI_NODE, script->OnPlayerLearnTaxiNode(player, nodeId));
+}
+
+void ScriptMgr::OnPlayerBeforeGetLevelForXPGain(Player const* player, uint8& level)
+{
+    CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_BEFORE_GET_LEVEL_FOR_XP_GAIN, script->OnPlayerBeforeGetLevelForXPGain(player, level));
+    level = std::clamp(level, uint8(1), uint8(sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL)));
+}
+
+PlayerScript::PlayerScript(char const* name, std::vector<uint16> enabledHooks)
     : ScriptObject(name, PLAYERHOOK_END)
 {
     // If empty - enable all available hooks.

@@ -92,7 +92,8 @@ public:
                     break;
                 case GO_ATALAI_IDOL:
                     if (_statuePhase == MAX_STATUE_PHASE)
-                        gameobject->SummonGameObject(GO_IDOL_OF_HAKKAR, -480.08f, 94.29f, -189.72f, 1.571f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+                        gameobject->SummonGameObject(GO_IDOL_OF_HAKKAR, -476.269317626953125f, 94.4119873046875f, -189.729660034179687f, 1.588248729705810546f, 0.0f, 0.0f, 0.713250160217285156f, 0.700909554958343505f, 0); // VerifiedBuild 50250
+
                     break;
                 case GO_IDOL_OF_HAKKAR:
                     if (_encounters[TYPE_ATAL_ALARION] == DONE)
@@ -165,7 +166,8 @@ public:
                 case DATA_STATUES:
                     ++_statuePhase;
                     if (_statuePhase == MAX_STATUE_PHASE)
-                        instance->SummonGameObject(GO_IDOL_OF_HAKKAR, -480.08f, 94.29f, -189.72f, 1.571f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+                        instance->SummonGameObject(GO_IDOL_OF_HAKKAR, -476.269317626953125f, 94.4119873046875f, -189.729660034179687f, 1.588248729705810546f, 0.0f, 0.0f, 0.713250160217285156f, 0.700909554958343505f, 0); // VerifiedBuild 50250
+
                     break;
             }
         }
@@ -217,7 +219,7 @@ class at_malfurion_stormrage : public AreaTriggerScript
 public:
     at_malfurion_stormrage() : AreaTriggerScript("at_malfurion_stormrage") { }
 
-    bool OnTrigger(Player* player, const AreaTrigger* /*at*/) override
+    bool OnTrigger(Player* player, AreaTrigger const* /*at*/) override
     {
         if (player->GetInstanceScript() && !player->FindNearestCreature(NPC_MALFURION_STORMRAGE, 15.0f) &&
                 player->GetQuestStatus(QUEST_THE_CHARGE_OF_DRAGONFLIGHTS) == QUEST_STATUS_REWARDED && player->GetQuestStatus(QUEST_ERANIKUS_TYRANT_OF_DREAMS) != QUEST_STATUS_REWARDED)

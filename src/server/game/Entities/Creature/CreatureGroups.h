@@ -102,16 +102,19 @@ public:
     bool IsEmpty() const { return m_members.empty(); }
     bool IsFormed() const { return m_Formed; }
 
-    const CreatureGroupMemberType& GetMembers() const { return m_members; }
+    CreatureGroupMemberType const& GetMembers() const { return m_members; }
 
     void AddMember(Creature* member);
     void RemoveMember(Creature* member);
     void FormationReset(bool dismiss, bool initMotionMaster);
 
-    void LeaderMoveTo(float x, float y, float z, uint32 move_type);
+    void LeaderStartedMoving();
+    [[nodiscard]] bool CanLeaderStartMoving() const;
+    void RemoveFormationMovement();
     void MemberEngagingTarget(Creature* member, Unit* target);
     Unit* GetNewTargetForMember(Creature* member);
     void MemberEvaded(Creature* member);
+    void DespawnFormation(Milliseconds timeToDespawn = 0ms, Seconds forcedRespawnTimer = 0s);
     void RespawnFormation(bool force = false);
     [[nodiscard]] bool IsFormationInCombat();
     [[nodiscard]] bool IsAnyMemberAlive(bool ignoreLeader = false);

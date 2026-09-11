@@ -132,8 +132,12 @@ bool ArenaTeam::AddMember(ObjectGuid playerGuid)
 
     if (sWorld->getIntConfig(CONFIG_ARENA_START_PERSONAL_RATING) > 0)
         personalRating = sWorld->getIntConfig(CONFIG_ARENA_START_PERSONAL_RATING);
+    else if (sArenaSeasonMgr->GetCurrentSeason() < 6)
+        personalRating = 1500;
     else if (GetRating() >= 1000)
         personalRating = 1000;
+
+    sScriptMgr->OnGetStartPersonalRating(this, playerGuid, personalRating);
 
     // xinef: sync query
     // Try to get player's match maker rating from db and fall back to config setting if not found
@@ -180,6 +184,7 @@ bool ArenaTeam::AddMember(ObjectGuid playerGuid)
     stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_ARENA_TEAM_MEMBER);
     stmt->SetData(0, TeamId);
     stmt->SetData(1, playerGuid.GetCounter());
+    stmt->SetData(2, personalRating);
     CharacterDatabase.Execute(stmt);
 
     // Inform player if online
@@ -671,9 +676,9 @@ uint32 ArenaTeam::GetPoints(uint32 memberRating)
 
     // Type penalties for teams < 5v5
     if (Type == ARENA_TEAM_2v2)
-        points *= 0.76f;
+        points *= sWorld->getRate(RATE_ARENA_POINTS_2V2);
     else if (Type == ARENA_TEAM_3v3)
-        points *= 0.88f;
+        points *= sWorld->getRate(RATE_ARENA_POINTS_3V3);
 
     sScriptMgr->OnGetArenaPoints(this, points);
 
@@ -775,7 +780,7 @@ int32 ArenaTeam::GetRatingMod(uint32 ownRating, uint32 opponentRating, bool won 
     return (int32)ceil(mod);
 }
 
-void ArenaTeam::FinishGame(int32 mod, const Map* bgMap)
+void ArenaTeam::FinishGame(int32 mod, Map const* bgMap)
 {
     // Rating can only drop to 0
     if (int32(Stats.Rating) + mod < 0)
@@ -805,7 +810,7 @@ void ArenaTeam::FinishGame(int32 mod, const Map* bgMap)
     }
 }
 
-int32 ArenaTeam::WonAgainst(uint32 Own_MMRating, uint32 Opponent_MMRating, int32& rating_change, const Map* bgMap)
+int32 ArenaTeam::WonAgainst(uint32 Own_MMRating, uint32 Opponent_MMRating, int32& rating_change, Map const* bgMap)
 {
     // Called when the team has won
     // Change in Matchmaker rating
@@ -825,7 +830,7 @@ int32 ArenaTeam::WonAgainst(uint32 Own_MMRating, uint32 Opponent_MMRating, int32
     return mod;
 }
 
-int32 ArenaTeam::LostAgainst(uint32 Own_MMRating, uint32 Opponent_MMRating, int32& rating_change, const Map* bgMap)
+int32 ArenaTeam::LostAgainst(uint32 Own_MMRating, uint32 Opponent_MMRating, int32& rating_change, Map const* bgMap)
 {
     // Called when the team has lost
     // Change in Matchmaker Rating
@@ -966,12 +971,15 @@ void ArenaTeam::SaveToDB(bool forceMemberSave)
         stmt->SetData(6, itr->Guid.GetCounter());
         trans->Append(stmt);
 
-        stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_CHARACTER_ARENA_STATS);
-        stmt->SetData(0, itr->Guid.GetCounter());
-        stmt->SetData(1, GetSlot());
-        stmt->SetData(2, itr->MatchMakerRating);
-        stmt->SetData(3, itr->MaxMMR);
-        trans->Append(stmt);
+        if (sScriptMgr->CanSaveArenaStatsForMember(this, itr->Guid))
+        {
+            stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_CHARACTER_ARENA_STATS);
+            stmt->SetData(0, itr->Guid.GetCounter());
+            stmt->SetData(1, GetSlot());
+            stmt->SetData(2, itr->MatchMakerRating);
+            stmt->SetData(3, itr->MaxMMR);
+            trans->Append(stmt);
+        }
     }
 
     CharacterDatabase.CommitTransaction(trans);
@@ -1007,7 +1015,7 @@ bool ArenaTeam::IsFighting() const
     return false;
 }
 
-ArenaTeamMember* ArenaTeam::GetMember(const std::string& name)
+ArenaTeamMember* ArenaTeam::GetMember(std::string const& name)
 {
     return GetMember(sCharacterCache->GetCharacterGuidByName(name));
 }

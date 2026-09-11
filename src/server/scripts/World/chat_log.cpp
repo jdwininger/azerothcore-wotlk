@@ -20,6 +20,7 @@
 #include "Guild.h"
 #include "Log.h"
 #include "PlayerScript.h"
+#include "World.h"
 
 class ChatLogScript : public PlayerScript
 {
@@ -27,17 +28,20 @@ public:
     ChatLogScript() :
         PlayerScript("ChatLogScript",
         {
-            PLAYERHOOK_ON_CHAT,
-            PLAYERHOOK_ON_CHAT_WITH_GROUP,
-            PLAYERHOOK_ON_CHAT_WITH_GUILD,
-            PLAYERHOOK_ON_CHAT_WITH_CHANNEL,
-            PLAYERHOOK_ON_CHAT_WITH_RECEIVER
+            PLAYERHOOK_CAN_PLAYER_USE_CHAT,
+            PLAYERHOOK_CAN_PLAYER_USE_PRIVATE_CHAT,
+            PLAYERHOOK_CAN_PLAYER_USE_GROUP_CHAT,
+            PLAYERHOOK_CAN_PLAYER_USE_GUILD_CHAT,
+            PLAYERHOOK_CAN_PLAYER_USE_CHANNEL_CHAT,
         })
     {
     }
 
-    void OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& msg) override
+    bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 lang, std::string& msg) override
     {
+        if (!sWorld->getBoolConfig(CONFIG_CHATLOG_ENABLED))
+            return true;
+
         std::string logType = "";
         std::string chatType = "";
 
@@ -56,15 +60,20 @@ public:
                 chatType = "yells";
                 break;
             default:
-                return;
+                return true;
         }
 
         LOG_INFO(logType, "Player {} {} (language {}): {}",
             player->GetName(), chatType, lang, msg);
+
+        return true;
     }
 
-    void OnPlayerChat(Player* player, uint32 /*type*/, uint32 lang, std::string& msg, Player* receiver) override
+    bool OnPlayerCanUseChat(Player* player, uint32 /*type*/, uint32 lang, std::string& msg, Player* receiver) override
     {
+        if (!sWorld->getBoolConfig(CONFIG_CHATLOG_ENABLED))
+            return true;
+
         //! NOTE:
         //! LANG_ADDON can only be sent by client in "PARTY", "RAID", "GUILD", "BATTLEGROUND", "WHISPER"
         std::string logType = (lang != LANG_ADDON) ? "chat." : "chat.addon.";
@@ -72,10 +81,15 @@ public:
 
         LOG_INFO(logType + msgType, "Player {} {} {}: {}",
                player->GetName(), msgType, receiver ? receiver->GetName() : "<unknown>", msg);
+
+        return true;
     }
 
-    void OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& msg, Group* group) override
+    bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 lang, std::string& msg, Group* group) override
     {
+        if (!sWorld->getBoolConfig(CONFIG_CHATLOG_ENABLED))
+            return true;
+
         //! NOTE:
         //! LANG_ADDON can only be sent by client in "PARTY", "RAID", "GUILD", "BATTLEGROUND", "WHISPER"
         std::string logType = (lang != LANG_ADDON) ? "chat." : "chat.addon.";
@@ -97,7 +111,7 @@ public:
                 msgType = "bg";
                 break;
             default:
-                return;
+                return true;
         }
 
         std::string role = (type == CHAT_MSG_PARTY_LEADER || type == CHAT_MSG_RAID_LEADER || type == CHAT_MSG_BATTLEGROUND_LEADER) ? "Leader player" : "Player";
@@ -106,10 +120,15 @@ public:
 
         LOG_INFO(logType + msgType, "{} {} {} {} with leader {}: {}",
             role, player->GetName(), action, msgType, targetGroup, msg);
+
+        return true;
     }
 
-    void OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& msg, Guild* guild) override
+    bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 lang, std::string& msg, Guild* guild) override
     {
+        if (!sWorld->getBoolConfig(CONFIG_CHATLOG_ENABLED))
+            return true;
+
         //! NOTE:
         //! LANG_ADDON can only be sent by client in "PARTY", "RAID", "GUILD", "BATTLEGROUND", "WHISPER"
         std::string logType = (lang != LANG_ADDON) ? "chat." : "chat.addon.";
@@ -124,15 +143,20 @@ public:
                 msgType = "guild.officer";
                 break;
             default:
-                return;
+                return true;
         }
 
         LOG_INFO(logType + msgType, "Player {} tells {} \"{}\": {}",
             player->GetName(), msgType, guild ? guild->GetName() : "<unknown>", msg);
+
+        return true;
     }
 
-    void OnPlayerChat(Player* player, uint32 /*type*/, uint32 /*lang*/, std::string& msg, Channel* channel) override
+    bool OnPlayerCanUseChat(Player* player, uint32 /*type*/, uint32 /*lang*/, std::string& msg, Channel* channel) override
     {
+        if (!sWorld->getBoolConfig(CONFIG_CHATLOG_ENABLED))
+            return true;
+
         bool isSystem = channel &&
                         (channel->HasFlag(CHANNEL_FLAG_TRADE) ||
                          channel->HasFlag(CHANNEL_FLAG_GENERAL) ||
@@ -152,6 +176,8 @@ public:
             LOG_INFO("chat.channel." + channelName, "Player {} tells channel {}: {}",
                 player->GetName(), channelName, msg);
         }
+
+        return true;
     }
 };
 

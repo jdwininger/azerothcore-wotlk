@@ -141,13 +141,15 @@ public:
 
         void MoveInLineOfSight(Unit* who) override
         {
-            if (!who || me->getStandState() != UNIT_STAND_STATE_SLEEP || !who->IsPlayer() || me->GetDistance2d(who) > 90.0f || who->ToPlayer()->IsGameMaster())
+            if (!who || me->getStandState() != UNIT_STAND_STATE_SLEEP || !who->IsPlayer() ||
+                who->ToPlayer()->IsGameMaster() || me->GetDistance2d(who) > 90.0f ||
+                !me->isInFront(who, M_PI / 4.0f) || !me->IsWithinLOSInMap(who))
                 return;
 
             me->SetInCombatWithZone();
             me->SetStandState(UNIT_STAND_STATE_STAND);
 
-            ScheduleUniqueTimedEvent(5s, [&] { // 15s
+            ScheduleUniqueTimedEvent(5s, [&] {
                 me->SetStandState(UNIT_STAND_STATE_SUBMERGED);
                 DoCastSelf(SPELL_SUMMON_ESSENCE_OF_SUFFERING);
             }, EVENT_ESSENCE_OF_SUFFERING);
@@ -261,11 +263,10 @@ public:
 
     struct boss_essence_of_sufferingAI : public ScriptedAI
     {
-        boss_essence_of_sufferingAI(Creature* creature) : ScriptedAI(creature), _recentlySpoken(false) { }
+        boss_essence_of_sufferingAI(Creature* creature) : ScriptedAI(creature) { }
 
         void Reset() override
         {
-            _recentlySpoken = false;
             scheduler.CancelAll();
         }
 
@@ -309,13 +310,7 @@ public:
 
         void KilledUnit(Unit* /*victim*/) override
         {
-            if (!_recentlySpoken)
-            {
-                Talk(SUFF_SAY_SLAY);
-                me->m_Events.AddEventAtOffset([&] {
-                    _recentlySpoken = false;
-                }, 6s);
-            }
+            Talk(SUFF_SAY_SLAY);
         }
 
         void JustEngagedWith(Unit* /*who*/) override
@@ -352,8 +347,6 @@ public:
             DoMeleeAttackIfReady();
         }
 
-    private:
-        bool _recentlySpoken;
     };
 };
 
@@ -369,11 +362,10 @@ public:
 
     struct boss_essence_of_desireAI : public ScriptedAI
     {
-        boss_essence_of_desireAI(Creature* creature) : ScriptedAI(creature), _recentlySpoken(false) { }
+        boss_essence_of_desireAI(Creature* creature) : ScriptedAI(creature) { }
 
         void Reset() override
         {
-            _recentlySpoken = false;
             scheduler.CancelAll();
         }
 
@@ -416,13 +408,7 @@ public:
 
         void KilledUnit(Unit* /*victim*/) override
         {
-            if (!_recentlySpoken)
-            {
-                Talk(DESI_SAY_SLAY);
-                me->m_Events.AddEventAtOffset([&] {
-                    _recentlySpoken = false;
-                }, 6s);
-            }
+            Talk(DESI_SAY_SLAY);
         }
 
         void JustEngagedWith(Unit* /*who*/) override
@@ -465,8 +451,6 @@ public:
             DoMeleeAttackIfReady();
         }
 
-    private:
-        bool _recentlySpoken;
     };
 };
 
@@ -482,13 +466,12 @@ public:
 
     struct boss_essence_of_angerAI : public ScriptedAI
     {
-        boss_essence_of_angerAI(Creature* creature) : ScriptedAI(creature), _recentlySpoken(false) { }
+        boss_essence_of_angerAI(Creature* creature) : ScriptedAI(creature) { }
 
         ObjectGuid targetGUID;
 
         void Reset() override
         {
-            _recentlySpoken = false;
             targetGUID.Clear();
             scheduler.CancelAll();
         }
@@ -505,13 +488,7 @@ public:
 
         void KilledUnit(Unit* /*victim*/) override
         {
-            if (!_recentlySpoken)
-            {
-                Talk(ANGER_SAY_SLAY);
-                me->m_Events.AddEventAtOffset([&] {
-                    _recentlySpoken = false;
-                }, 6s);
-            }
+            Talk(ANGER_SAY_SLAY);
         }
 
         void JustDied(Unit* /*killer*/) override
@@ -561,8 +538,6 @@ public:
             DoMeleeAttackIfReady();
         }
 
-    private:
-        bool _recentlySpoken;
     };
 };
 

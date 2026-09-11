@@ -44,7 +44,22 @@ void ScriptMgr::OnArenaStart(Battleground* bg)
     CALL_ENABLED_HOOKS(ArenaScript, ARENAHOOK_ON_ARENA_START, script->OnArenaStart(bg));
 }
 
-ArenaScript::ArenaScript(const char* name, std::vector<uint16> enabledHooks)
+bool ScriptMgr::OnBeforeArenaTeamMemberUpdate(ArenaTeam* team, Player* player, bool won, uint32 opponentMatchmakerRating, int32 matchmakerChange)
+{
+    CALL_ENABLED_BOOLEAN_HOOKS(ArenaScript, ARENAHOOK_ON_BEFORE_TEAM_MEMBER_UPDATE, !script->OnBeforeArenaTeamMemberUpdate(team, player, won, opponentMatchmakerRating, matchmakerChange));
+}
+
+bool ScriptMgr::CanSaveArenaStatsForMember(ArenaTeam* team, ObjectGuid playerGuid)
+{
+    CALL_ENABLED_BOOLEAN_HOOKS(ArenaScript, ARENAHOOK_CAN_SAVE_ARENA_STATS_FOR_MEMBER, !script->CanSaveArenaStatsForMember(team, playerGuid));
+}
+
+void ScriptMgr::OnGetStartPersonalRating(ArenaTeam* team, ObjectGuid playerGuid, uint32& personalRating)
+{
+    CALL_ENABLED_HOOKS(ArenaScript, ARENAHOOK_ON_GET_START_PERSONAL_RATING, script->OnGetStartPersonalRating(team, playerGuid, personalRating));
+}
+
+ArenaScript::ArenaScript(char const* name, std::vector<uint16> enabledHooks)
     : ScriptObject(name, ARENAHOOK_END)
 {
     // If empty - enable all available hooks.

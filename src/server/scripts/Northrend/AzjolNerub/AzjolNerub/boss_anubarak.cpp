@@ -69,13 +69,11 @@ enum Events
     EVENT_SUMMON_GUARDIAN               = 8,
     EVENT_SUMMON_VENOMANCER             = 9,
     EVENT_SUMMON_DARTER                 = 10,
-    EVENT_SUMMON_ASSASSINS              = 11,
-    EVENT_KILL_TALK                     = 12
+    EVENT_SUMMON_ASSASSINS              = 11
 };
 
 enum CreatureIds
 {
-    NPC_WORLD_TRIGGER                   = 22515,
     NPC_ANUBAR_GUARDIAN                 = 29216,
     NPC_ANUBAR_VENOMANCER               = 29217,
 };
@@ -263,11 +261,7 @@ struct boss_anub_arak : public BossAI
 
     void KilledUnit(Unit* /*victim*/) override
     {
-        if (!events.HasTimeUntilEvent(EVENT_KILL_TALK))
-        {
-            Talk(SAY_SLAY);
-            events.ScheduleEvent(EVENT_KILL_TALK, 6s);
-        }
+        Talk(SAY_SLAY);
     }
 
     void SummonedCreatureDies(Creature* summon, Unit* /*killer*/) override

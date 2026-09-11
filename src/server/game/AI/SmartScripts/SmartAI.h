@@ -58,7 +58,7 @@ public:
     void StopPath(uint32 DespawnTime = 0, uint32 quest = 0, bool fail = false);
     void EndPath(bool fail = false);
     void ResumePath();
-    WaypointData const* GetNextWayPoint();
+    WaypointNode const* GetNextWayPoint();
     void GenerateWayPointArray(Movement::PointsArray* points);
     bool HasEscortState(uint32 uiEscortState) { return (mEscortState & uiEscortState); }
     void AddEscortState(uint32 uiEscortState) { mEscortState |= uiEscortState; }
@@ -84,6 +84,9 @@ public:
 
     // Called for reaction at enter to combat if not in combat yet (enemy can be nullptr)
     void JustEngagedWith(Unit* enemy) override;
+
+    // Called when creature exits combat (all combat refs gone)
+    void JustExitedCombat() override;
 
     // Called for reaction at stopping attack at no attackers or targets
     void EnterEvadeMode(EvadeReason why = EVADE_REASON_OTHER) override;
@@ -181,12 +184,13 @@ public:
     void SetSwim(bool swim = true);
 
     void SetEvadeDisabled(bool disable = true);
+    void SetSuppressEvade(bool suppress) { mSuppressEvade = suppress; }
 
     void SetInvincibilityHpLevel(uint32 level) { mInvincibilityHpLevel = level; }
 
     void sGossipHello(Player* player) override;
     void sGossipSelect(Player* player, uint32 sender, uint32 action) override;
-    void sGossipSelectCode(Player* player, uint32 sender, uint32 action, const char* code) override;
+    void sGossipSelectCode(Player* player, uint32 sender, uint32 action, char const* code) override;
     void sQuestAccept(Player* player, Quest const* quest) override;
     //void sQuestSelect(Player* player, Quest const* quest);
     //void sQuestComplete(Player* player, Quest const* quest);
@@ -206,6 +210,11 @@ public:
 
     void PathEndReached(uint32 pathId) override;
 
+    void WaypointPathStarted(uint32 pathId) override;
+    void WaypointStarted(uint32 nodeId, uint32 pathId) override;
+    void WaypointReached(uint32 nodeId, uint32 pathId) override;
+    void WaypointPathEnded(uint32 nodeId, uint32 pathId) override;
+
     bool CanRespawn() override { return mcanSpawn; };
     void SetCanRespawn(bool canSpawn) { mcanSpawn = canSpawn; }
 
@@ -214,10 +223,15 @@ public:
 
     void DistancingEnded() override;
 
+    bool IsMainSpellPrevented(SpellInfo const* spellInfo) const;
+
+    void OnSpellFailed(SpellInfo const* spell) override;
+
 private:
     bool mIsCharmed;
     uint32 mFollowCreditType;
     uint32 mFollowArrivedTimer;
+    uint32 _followCheckTimer;
     uint32 mFollowCredit;
     uint32 mFollowArrivedEntry;
     bool   mFollowArrivedAlive;
@@ -234,11 +248,12 @@ private:
     bool mWPReached;
     bool mOOCReached;
     uint32 mWPPauseTimer;
-    WaypointData const* mLastWP;
+    WaypointNode const* mLastWP;
     uint32 mEscortNPCFlags;
-    uint32 GetWPCount() { return mWayPoints ? mWayPoints->size() : 0; }
+    uint32 GetWPCount() { return mWayPoints ? mWayPoints->Nodes.size() : 0; }
     bool mCanRepeatPath;
     bool mEvadeDisabled;
+    bool mSuppressEvade;
     bool mCanAutoAttack;
     bool mForcedPaused;
     uint32 mInvincibilityHpLevel;
@@ -249,6 +264,8 @@ private:
     uint32 mDespawnTime;
     uint32 mDespawnState;
     void UpdateDespawn(const uint32 diff);
+    void UpdateFollow(const uint32 diff);
+    void UpdateMeleeStance();
     uint32 mEscortInvokerCheckTimer;
     bool mJustReset;
 
@@ -265,6 +282,7 @@ private:
     bool _currentRangeMode;
     float _attackDistance;
     float _pendingDistancing;
+    uint32 _mainSpellId;
 };
 
 class SmartGameObjectAI : public GameObjectAI
@@ -281,12 +299,13 @@ public:
 
     bool GossipHello(Player* player, bool reportUse) override;
     bool GossipSelect(Player* player, uint32 sender, uint32 action) override;
-    bool GossipSelectCode(Player* /*player*/, uint32 /*sender*/, uint32 /*action*/, const char* /*code*/) override;
+    bool GossipSelectCode(Player* /*player*/, uint32 /*sender*/, uint32 /*action*/, char const* /*code*/) override;
     bool QuestAccept(Player* player, Quest const* quest) override;
     bool QuestReward(Player* player, Quest const* quest, uint32 opt) override;
     void Destroyed(Player* player, uint32 eventId) override;
     void SetData(uint32 id, uint32 value) override { SetData(id, value, nullptr); }
     void SetData(uint32 id, uint32 value, WorldObject* invoker);
+    uint32 GetData(uint32 id) const override;
     void SetScript9(SmartScriptHolder& e, uint32 entry, WorldObject* invoker);
     void OnGameEvent(bool start, uint16 eventId) override;
     void OnStateChanged(uint32 state, Unit* unit) override;
@@ -307,6 +326,7 @@ public:
 
 protected:
     SmartScript mScript;
+    std::unordered_map<uint32, uint32> aiDataSet;
 };
 
 /// Registers scripts required by the SAI scripting system

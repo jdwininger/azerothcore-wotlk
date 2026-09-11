@@ -37,7 +37,7 @@ enum AlchemistItemRequirements
 
 const uint32 AA_ITEM_ENTRY[24] = {38336, 39669, 38342, 38340, 38344, 38369, 38396, 38398, 38338, 38386, 38341, 38384, 38397, 38381, 38337, 38393, 38339, 39668, 39670, 38346, 38379, 38345, 38343, 38370};
 const uint32 AA_AURA_ID[24]    = {51095, 53153, 51100, 51087, 51091, 51081, 51072, 51079, 51018, 51067, 51055, 51064, 51077, 51062, 51057, 51069, 51059, 53150, 53158, 51093, 51097, 51102, 51083, 51085};
-const char*  AA_ITEM_NAME[24]  = {"Crystallized Hogsnot", "Ghoul Drool", "Trollbane", "Amberseed", "Shrunken Dragon's Claw",
+char const*  AA_ITEM_NAME[24]  = {"Crystallized Hogsnot", "Ghoul Drool", "Trollbane", "Amberseed", "Shrunken Dragon's Claw",
                                   "Wasp's Wings", "Hairy Herring Head", "Icecrown Bottled Water", "Knotroot", "Muddy Mire Maggot", "Pickled Eagle Egg",
                                   "Pulverized Gargoyle Teeth", "Putrid Pirate Perspiration", "Seasoned Slider Cider", "Speckled Guano", "Spiky Spider Egg",
                                   "Withered Batwing", "Abomination Guts", "Blight Crystal", "Chilled Serpent Mucus", "Crushed Basilisk Crystals",
@@ -129,7 +129,7 @@ public:
             // Decode Item Entry, Get Item Name, Generate Emotes
             //uint32 itemEntry = GetTaskItemEntry(itemCode);
             uint32 auraId = GetTaskAura(itemCode);
-            const char* itemName = GetTaskItemName(itemCode);
+            char const* itemName = GetTaskItemName(itemCode);
 
             switch (counter)
             {
@@ -171,7 +171,7 @@ public:
         uint32 GetTaskCounter(uint32 itemcode)   { return itemcode / 100; }
         uint32 GetTaskAura(uint32 itemcode)      { return AA_AURA_ID[itemcode % 100]; }
         uint32 GetTaskItemEntry(uint32 itemcode) { return AA_ITEM_ENTRY[itemcode % 100]; }
-        const char* GetTaskItemName(uint32 itemcode)  { return AA_ITEM_NAME[itemcode % 100]; }
+        char const* GetTaskItemName(uint32 itemcode)  { return AA_ITEM_NAME[itemcode % 100]; }
     };
 
     bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest) override
@@ -265,6 +265,7 @@ enum OverlordDrakuru
     NPC_TOTALLY_GENERIC_BUNNY             = 29100,
     NPC_TOTALLY_GENERIC_BUNNY_JSB         = 28960,
     GO_DRAKURUS_LAST_WISH                 = 202357,
+    GO_DRAKURUS_BONE                      = 191458,
 
     ACTION_SUMMON_DRAKURU_LAST_WISH       = 1,
     ACTION_DESTROY_DRAKURU_LAST_WISH      = 2,
@@ -316,7 +317,7 @@ struct npc_overlord_drakuru_betrayal : public ScriptedAI
 {
     npc_overlord_drakuru_betrayal(Creature* creature) : ScriptedAI(creature), _summons(me), _state(BETRAYAL_NOT_STARTED)
     {
-        me->SetCombatMovement(false);
+        me->SetControlled(true, UNIT_STATE_ROOT);
     }
 
     void EnterEvadeMode(EvadeReason why) override
@@ -375,7 +376,7 @@ struct npc_overlord_drakuru_betrayal : public ScriptedAI
     {
         if (Player* player = who->ToPlayer())
         {
-            bool shouldStartEvent = (_state == BETRAYAL_NOT_STARTED) && IsPlayerOnQuest(player) && player->HasAura(SPELL_SCOURGE_DISGUISE) && player->IsWithinDistInMap(me, 80.0f);
+            bool shouldStartEvent = (_state == BETRAYAL_NOT_STARTED) && IsPlayerOnQuest(player) && player->HasAura(SPELL_SCOURGE_DISGUISE) && player->IsWithinDistInMap(me, 80.0f) && !me->FindNearestGameObject(GO_DRAKURUS_BONE, 80.0f);
             if (shouldStartEvent)
             {
                 me->SetVisible(true);
@@ -587,6 +588,7 @@ struct npc_overlord_drakuru_betrayal : public ScriptedAI
                     lich->GetMotionMaster()->MovePoint(0, 6141.2393, -2011.2728, 589.8653);
                 break;
             case EVENT_BETRAYAL_EPILOGUE_10:
+                _state = BETRAYAL_EVADE;
                 EnterEvadeMode(EVADE_REASON_OTHER);
                 break;
         }
@@ -606,150 +608,6 @@ private:
     ObjectGuid _playerGUID;
     ObjectGuid _lichGUID;
     BetrayalState _state;
-};
-
-/*####
-## npc_drakuru_shackles
-####*/
-
-enum DrakuruShackles
-{
-    NPC_RAGECLAW                             = 29686,
-    QUEST_TROLLS_IS_GONE_CRAZY               = 12861,
-    SPELL_LEFT_CHAIN                         = 59951,
-    SPELL_RIGHT_CHAIN                        = 59952,
-    SPELL_UNLOCK_SHACKLE                     = 55083,
-    SPELL_FREE_RAGECLAW                      = 55223
-};
-
-class npc_drakuru_shackles : public CreatureScript
-{
-public:
-    npc_drakuru_shackles() : CreatureScript("npc_drakuru_shackles") { }
-
-    struct npc_drakuru_shacklesAI : public NullCreatureAI
-    {
-        npc_drakuru_shacklesAI(Creature* creature) : NullCreatureAI(creature)
-        {
-            _rageclawGUID.Clear();
-            timer = 0;
-        }
-
-        void Reset() override
-        {
-            me->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
-        }
-
-        void UpdateAI(uint32 diff) override
-        {
-            timer += diff;
-            if (timer >= 2000)
-            {
-                timer = 0;
-                if (_rageclawGUID)
-                    return;
-
-                if (Creature* cr = me->FindNearestCreature(NPC_RAGECLAW, 10.0f))
-                {
-                    _rageclawGUID = cr->GetGUID();
-                    LockRageclaw(cr);
-                }
-            }
-        }
-
-        void LockRageclaw(Creature* rageclaw)
-        {
-            // pointer check not needed
-            me->SetFacingToObject(rageclaw);
-            rageclaw->SetFacingToObject(me);
-
-            DoCast(rageclaw, SPELL_LEFT_CHAIN, true);
-            DoCast(rageclaw, SPELL_RIGHT_CHAIN, true);
-        }
-
-        void UnlockRageclaw(Unit*  /*who*/, Creature* rageclaw)
-        {
-            // pointer check not needed
-            DoCast(rageclaw, SPELL_FREE_RAGECLAW, true);
-            _rageclawGUID.Clear();
-            me->DespawnOrUnsummon(1ms);
-        }
-
-        void SpellHit(Unit* caster, SpellInfo const* spell) override
-        {
-            if (spell->Id == SPELL_UNLOCK_SHACKLE)
-            {
-                if (caster->ToPlayer()->GetQuestStatus(QUEST_TROLLS_IS_GONE_CRAZY) == QUEST_STATUS_INCOMPLETE)
-                {
-                    if (Creature* rageclaw = ObjectAccessor::GetCreature(*me, _rageclawGUID))
-                    {
-                        UnlockRageclaw(caster, rageclaw);
-                        caster->ToPlayer()->KilledMonster(rageclaw->GetCreatureTemplate(), _rageclawGUID);
-                        me->DespawnOrUnsummon();
-                    }
-                    else
-                        me->setDeathState(DeathState::JustDied);
-                }
-            }
-        }
-
-    private:
-        ObjectGuid _rageclawGUID;
-        uint32 timer;
-    };
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_drakuru_shacklesAI(creature);
-    }
-};
-
-/*####
-## npc_captured_rageclaw
-####*/
-
-enum Rageclaw
-{
-    SPELL_UNSHACKLED                         = 55085,
-    SPELL_KNEEL                              = 39656,
-    SAY_RAGECLAW                             = 0
-};
-
-class npc_captured_rageclaw : public CreatureScript
-{
-public:
-    npc_captured_rageclaw() : CreatureScript("npc_captured_rageclaw") { }
-
-    struct npc_captured_rageclawAI : public NullCreatureAI
-    {
-        npc_captured_rageclawAI(Creature* creature) : NullCreatureAI(creature) { }
-
-        void Reset() override
-        {
-            me->SetFaction(FACTION_FRIENDLY);
-            DoCast(me, SPELL_KNEEL, true); // Little Hack for kneel - Thanks Illy :P
-        }
-
-        void SpellHit(Unit* /*caster*/, SpellInfo const* spell) override
-        {
-            if (spell->Id == SPELL_FREE_RAGECLAW)
-            {
-                me->RemoveAurasDueToSpell(SPELL_LEFT_CHAIN);
-                me->RemoveAurasDueToSpell(SPELL_RIGHT_CHAIN);
-                me->RemoveAurasDueToSpell(SPELL_KNEEL);
-                me->SetFaction(me->GetCreatureTemplate()->faction);
-                DoCast(me, SPELL_UNSHACKLED, true);
-                Talk(SAY_RAGECLAW);
-                me->GetMotionMaster()->MoveRandom(10);
-                me->DespawnOrUnsummon(10s);
-            }
-        }
-    };
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_captured_rageclawAI(creature);
-    }
 };
 
 /*####
@@ -971,8 +829,6 @@ void AddSC_zuldrak()
     new npc_finklestein();
     new go_finklestein_cauldron();
     RegisterCreatureAI(npc_overlord_drakuru_betrayal);
-    new npc_drakuru_shackles();
-    new npc_captured_rageclaw();
     new npc_released_offspring_harkoa();
     new npc_crusade_recruit();
     new go_scourge_enclosure();

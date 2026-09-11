@@ -150,7 +150,7 @@ void OPvPCapturePointNA::SpawnNPCsForTeam(HalaaNPCS teamNPC)
     for (int i = 0; i < NA_HALAA_CREATURE_TEAM_SPAWN; i++)
     {
         ObjectGuid::LowType spawnId = teamNPC[i];
-        const CreatureData* data = sObjectMgr->GetCreatureData(spawnId);
+        CreatureData const* data = sObjectMgr->GetCreatureData(spawnId);
         if (data)
         {
             UpdateCreatureHalaa(spawnId, _pvp->GetMap(), data->posX, data->posY);
@@ -162,7 +162,7 @@ void OPvPCapturePointNA::SpawnNPCsForTeam(HalaaNPCS teamNPC)
 
 void OPvPCapturePointNA::SpawnGOsForTeam(TeamId teamId)
 {
-    const go_type* gos = nullptr;
+    go_type const* gos = nullptr;
     if (teamId == TEAM_ALLIANCE)
         gos = AllianceControlGOs;
     else if (teamId == TEAM_HORDE)
@@ -470,7 +470,7 @@ int32 OPvPCapturePointNA::HandleOpenGo(Player* player, GameObject* go)
     int32 retval = OPvPCapturePoint::HandleOpenGo(player, go);
     if (retval >= 0)
     {
-        const go_type* gos = nullptr;
+        go_type const* gos = nullptr;
         if (m_ControllingFaction == TEAM_ALLIANCE)
             gos = AllianceControlGOs;
         else if (m_ControllingFaction == TEAM_HORDE)
@@ -673,11 +673,11 @@ bool OPvPCapturePointNA::Update(uint32 diff)
             m_RespawnTimer -= diff;
 
         // get the difference of numbers
-        float factDiff = ((float)_activePlayers[0].size() - (float)_activePlayers[1].size()) * diff / OUTDOORPVP_OBJECTIVE_UPDATE_INTERVAL;
+        float factDiff = (((float)_activePlayers[0].size() - (float)_activePlayers[1].size()) * diff / OUTDOORPVP_OBJECTIVE_UPDATE_INTERVAL) * sWorld->getFloatConfig(CONFIG_OUTDOOR_PVP_CAPTURE_RATE);
         if (!factDiff)
             return false;
 
-        float maxDiff = _maxSpeed * diff;
+        float maxDiff = _maxSpeed * diff * sWorld->getFloatConfig(CONFIG_OUTDOOR_PVP_CAPTURE_RATE);
 
         if (factDiff < 0)
         {

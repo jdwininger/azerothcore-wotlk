@@ -75,6 +75,7 @@ public:
                 summoned->AI()->AttackStart(me->GetVictim());
         }
 
+        using CreatureAI::WaypointReached;
         void WaypointReached(uint32 waypointId) override
         {
             Player* player = GetPlayerForEscort();
@@ -388,116 +389,6 @@ class spell_q12227_camera_shake : public SpellScript
     void Register() override
     {
         OnEffectHitTarget += SpellEffectFn(spell_q12227_camera_shake::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_DUMMY);
-    }
-};
-// Tallhorn Stage
-
-enum TallhornStage
-{
-    //Gameobject
-    OBJECT_HAUNCH                   = 188665
-};
-
-class npc_tallhorn_stag : public CreatureScript
-{
-public:
-    npc_tallhorn_stag() : CreatureScript("npc_tallhorn_stag") { }
-
-    struct npc_tallhorn_stagAI : public ScriptedAI
-    {
-        npc_tallhorn_stagAI(Creature* creature) : ScriptedAI(creature) { }
-
-        void Reset() override
-        {
-            _phase = 1;
-        }
-
-        void UpdateAI(uint32 /*diff*/) override
-        {
-            if (_phase == 1)
-            {
-                if (me->FindNearestGameObject(OBJECT_HAUNCH, 2.0f))
-                {
-                    me->SetStandState(UNIT_STAND_STATE_DEAD);
-                    me->SetImmuneToPC(true);
-                    me->ReplaceAllDynamicFlags(UNIT_DYNFLAG_DEAD);
-                }
-                _phase = 0;
-            }
-            DoMeleeAttackIfReady();
-        }
-    private:
-        uint8 _phase;
-    };
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_tallhorn_stagAI(creature);
-    }
-};
-
-// Amberpine Woodsman
-
-enum AmberpineWoodsman
-{
-    // Creature
-    NPC_TALLHORN_STAG                      = 26363
-};
-
-enum AmberpineWoodsmanEvents
-{
-    EVENT_WOODSMAN_1                       = 1,
-    EVENT_WOODSMAN_2                       = 2
-};
-
-class npc_amberpine_woodsman : public CreatureScript
-{
-public:
-    npc_amberpine_woodsman() : CreatureScript("npc_amberpine_woodsman") { }
-
-    struct npc_amberpine_woodsmanAI : public ScriptedAI
-    {
-        npc_amberpine_woodsmanAI(Creature* creature) : ScriptedAI(creature) { }
-
-        void Reset() override
-        {
-            if (me->FindNearestCreature(NPC_TALLHORN_STAG, 0.2f))
-            {
-                me->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_STATE_USE_STANDING);
-            }
-            else
-                _events.ScheduleEvent(EVENT_WOODSMAN_1, 0ms);
-        }
-
-        void UpdateAI(uint32 diff) override
-        {
-            _events.Update(diff);
-
-            while (uint32 eventId = _events.ExecuteEvent())
-            {
-                switch (eventId)
-                {
-                    case EVENT_WOODSMAN_1:
-                        me->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_STATE_LOOT);
-                        _events.ScheduleEvent(EVENT_WOODSMAN_2, 3s);
-                        break;
-                    case EVENT_WOODSMAN_2:
-                        me->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_ATTACK1H);
-                        _events.ScheduleEvent(EVENT_WOODSMAN_1, 4s);
-                        break;
-                    default:
-                        break;
-                }
-            }
-            UpdateVictim();
-        }
-    private:
-        EventMap _events;
-    };
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_amberpine_woodsmanAI(creature);
     }
 };
 
@@ -1173,13 +1064,31 @@ class spell_frog_kiss : public SpellScript
     }
 };
 
+class spell_q12058_the_runic_prophecies : public SpellScript
+{
+    PrepareSpellScript(spell_q12058_the_runic_prophecies);
+
+    void HandleScriptEffect(SpellEffIndex /*effIndex*/)
+    {
+        Player* player = GetHitPlayer();
+
+        if (!player)
+            return;
+
+        player->Unit::Say(GetSpellInfo()->Effects[EFFECT_0].CalcValue());
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_q12058_the_runic_prophecies::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
+    }
+};
+
 void AddSC_grizzly_hills()
 {
     new npc_emily();
     new npc_mrfloppy();
     new npc_ravenous_worg();
-    new npc_tallhorn_stag();
-    new npc_amberpine_woodsman();
     RegisterCreatureAI(npc_wounded_skirmisher);
     RegisterSpellScript(spell_renew_skirmisher);
     new npc_venture_co_straggler();
@@ -1193,4 +1102,5 @@ void AddSC_grizzly_hills()
     RegisterSpellScript(spell_q12227_outhouse_groans);
     RegisterSpellScript(spell_q12227_camera_shake);
     RegisterSpellScript(spell_frog_kiss);
+    RegisterSpellScript(spell_q12058_the_runic_prophecies);
 }

@@ -301,7 +301,7 @@ bool ReputationMgr::SetReputation(FactionEntry const* factionEntry, float standi
     if (!noSpillOver)
     {
         // if spillover definition exists in DB, override DBC
-        if (const RepSpilloverTemplate* repTemplate = sObjectMgr->GetRepSpilloverTemplate(factionEntry->ID))
+        if (RepSpilloverTemplate const* repTemplate = sObjectMgr->GetRepSpilloverTemplate(factionEntry->ID))
         {
             for (uint32 i = 0; i < MAX_SPILLOVER_FACTIONS; ++i)
             {
@@ -432,7 +432,7 @@ bool ReputationMgr::SetOneFactionReputation(FactionEntry const* factionEntry, fl
             if (new_rank <= REP_HOSTILE)
                 SetAtWar(&itr->second, true);
 
-            if (old_rank == REP_HOSTILE && new_rank >= REP_UNFRIENDLY && factionEntry->CanBeSetAtWar())
+            if (old_rank <= REP_HOSTILE && new_rank >= REP_UNFRIENDLY && factionEntry->CanBeSetAtWar())
                 SetAtWar(&itr->second, false);
 
             if (new_rank > old_rank)
